@@ -102,13 +102,13 @@ const HLDG={
   vor23:{fix:"DGO",hldg:"255°",turn:"Izquierda",nav:"VOR DGO 112.3",rnp:false,desde:{
     rnp05:{tipo:"Paralela",color:"#ec4899",steps:["Frustrada RNP 05: TR054° → viraje izquierda a 3.000'","Interceptar VOR DGO desde el Este","Llegando a DGO desde el Este (rumbo ~255°)","→ ENTRADA PARALELA","Sobre DGO (TO→FROM): volar rumbo 075° por 1 min","Viraje izquierda 180° para interceptar inbound 075°","⚠️ Holding SOLO en VMC"]},
     ils23:{tipo:"Directa",color:"#8b5cf6",steps:["Frustrada ILS 23: HDG pista → viraje izquierda rumbo Norte","Interceptar R360 VOR DGO desde el Sur","Llegando a DGO desde el Sur (rumbo ~000°)","→ ENTRADA DIRECTA","Sobre DGO (TO→FROM): virar izquierda al rumbo 255°","Tomar tiempo 1 min → virar izquierda al inbound 075°","⚠️ Holding SOLO en VMC"]}}},
-  rnp23:{fix:"EDNOD",hldg:"144°",turn:"Derecha",nav:"G1000 FMS",rnp:true},
+  rnp23:{fix:"ISROL",hldg:"324°",turn:"Derecha",nav:"G1000 FMS",rnp:true},
   rnp05:{fix:"ASBIB",hldg:"054°",turn:"Izquierda",nav:"G1000 FMS",rnp:true}
 };
 const FL={
   rnp23:{label:"RNP RWY 23",color:"#3b82f6",phases:[
     {id:"llegada",label:"📡 Llegada",steps:["Llegada desde el Este por ISROL (salida visual Padre Hurtado)","G1000: Cargar RNP RWY 23 → activar → IAF: ISROL","COM: Torre Santo Domingo 134.6 / 121.9","BARO actualizado · Nivel de transición por ATC","Velocidad: 100 kt · Flap: 10° (1 noch)","AP: HDG + ALT activos","⚠️ APR en AP al pasar ISROL"]},
-    {id:"hldg",label:"🔄 Holding EDNOD",isHolding:true,holdingId:"rnp23"},
+    {id:"hldg",label:"🔄 Holding ISROL",isHolding:true,holdingId:"rnp23"},
     {id:"briefing",label:"📋 Briefing",steps:["Tipo: RNP RWY 23 (LNAV only) — Solo instrucción","IAF: ISROL / ASBOX / SN028 · FAF: GELAX · MAPt: RW23","Curso final: 234° · ALT mínima ASBOX: 1.900'","LNAV MDA directa RWY 23: 780' (534')","MDA circular Cat A RWY 05: 800' (554') · CEIL 1.150 ft","Frustrada: TR234 hasta 1.500' → viraje derecha a 3.500' directo EDNOD → HLDG 144° RT"]},
     {id:"aprox",label:"✈️ Aproximación",steps:["ISROL: colocar APR en AP","Velocidad: 100 kt · Flap: 10°","Pasando GELAX (FAF): notificar 'dejando 3.500' / iniciando aprox'","Flap: 20° · Velocidad: 90 kt","G1000: modificar altitud AP a próxima mínima","Preparar altitud frustrada 3.500' en AP","Descenso 3.18° · FPM 100 kt = 563 fpm","A 20 ft sobre MDA: ALT en AP · volar hasta MAPt RW23"]},
     {id:"circular",label:"🔄 Circular → 05",isCircular:true,circRwy:"05",steps:circS("05")},
