@@ -1,0 +1,92 @@
+<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#1e3a5f"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </radialGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#3b82f6" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Background rect with rounded corners -->
+  <rect width="512" height="512" rx="100" fill="url(#bg)"/>
+  
+  <!-- Glow -->
+  <ellipse cx="256" cy="220" rx="200" ry="160" fill="url(#glow)"/>
+
+  <!-- Horizon line -->
+  <line x1="60" y1="290" x2="452" y2="290" stroke="#3b82f6" stroke-width="1.5" stroke-opacity="0.4"/>
+
+  <!-- Compass ticks -->
+  <g stroke="#3b82f6" stroke-width="1.5" stroke-opacity="0.5">
+    <line x1="256" y1="80" x2="256" y2="100"/>
+    <line x1="352" y1="107" x2="342" y2="124"/>
+    <line x1="416" y1="200" x2="396" y2="200"/>
+    <line x1="160" y1="107" x2="170" y2="124"/>
+    <line x1="96" y1="200" x2="116" y2="200"/>
+  </g>
+
+  <!-- Plane shadow -->
+  <g transform="translate(256,215) scale(1.15)" opacity="0.25">
+    <!-- fuselage -->
+    <ellipse cx="0" cy="6" rx="72" ry="10" fill="#000"/>
+  </g>
+
+  <!-- Plane body — top-down view -->
+  <g transform="translate(256,210)">
+    <!-- Fuselage -->
+    <ellipse cx="0" cy="0" rx="14" ry="68" fill="#e2e8f0"/>
+    <!-- Wings -->
+    <ellipse cx="0" cy="10" rx="110" ry="16" fill="#cbd5e1"/>
+    <!-- Wing tips -->
+    <ellipse cx="-100" cy="10" rx="18" ry="8" fill="#94a3b8" transform="rotate(-8,-100,10)"/>
+    <ellipse cx="100" cy="10" rx="18" ry="8" fill="#94a3b8" transform="rotate(8,100,10)"/>
+    <!-- Tail -->
+    <ellipse cx="0" cy="58" rx="38" ry="9" fill="#cbd5e1"/>
+    <!-- Cockpit -->
+    <ellipse cx="0" cy="-48" rx="9" ry="14" fill="#38bdf8" opacity="0.9"/>
+    <!-- Engine left -->
+    <ellipse cx="-52" cy="18" rx="8" ry="18" fill="#94a3b8"/>
+    <ellipse cx="-52" cy="4" rx="7" ry="5" fill="#1e293b"/>
+    <!-- Engine right -->
+    <ellipse cx="52" cy="18" rx="8" ry="18" fill="#94a3b8"/>
+    <ellipse cx="52" cy="4" rx="7" ry="5" fill="#1e293b"/>
+    <!-- Center line -->
+    <line x1="0" y1="-60" x2="0" y2="65" stroke="#475569" stroke-width="1" stroke-dasharray="6,4" opacity="0.5"/>
+  </g>
+
+  <!-- Glowing ring around plane -->
+  <circle cx="256" cy="210" r="105" fill="none" stroke="#3b82f6" stroke-width="1.5" stroke-opacity="0.4" stroke-dasharray="8,6"/>
+
+  <!-- Top label: SCSN -->
+  <text x="256" y="138" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="36" font-weight="900" letter-spacing="10" fill="#38bdf8">SCSN</text>
+
+  <!-- Separator line -->
+  <line x1="120" y1="152" x2="392" y2="152" stroke="#3b82f6" stroke-width="1" stroke-opacity="0.5"/>
+
+  <!-- Bottom box -->
+  <rect x="96" y="360" width="320" height="90" rx="16" fill="#1e3a5f" stroke="#3b82f6" stroke-width="1.5" stroke-opacity="0.6"/>
+
+  <!-- IFR FLOWS text -->
+  <text x="256" y="398" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="28" font-weight="900" letter-spacing="6" fill="#ffffff">IFR FLOWS</text>
+
+  <!-- T206H · G1000 -->
+  <text x="256" y="432" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="16" font-weight="500" letter-spacing="2" fill="#64748b">T206H · G1000</text>
+
+  <!-- Corner dots -->
+  <circle cx="130" cy="378" r="3" fill="#3b82f6" opacity="0.6"/>
+  <circle cx="382" cy="378" r="3" fill="#3b82f6" opacity="0.6"/>
+  <circle cx="130" cy="432" r="3" fill="#3b82f6" opacity="0.6"/>
+  <circle cx="382" cy="432" r="3" fill="#3b82f6" opacity="0.6"/>
+
+  <!-- Small stars -->
+  <circle cx="80" cy="80" r="2" fill="#94a3b8" opacity="0.4"/>
+  <circle cx="440" cy="60" r="1.5" fill="#94a3b8" opacity="0.4"/>
+  <circle cx="60" cy="350" r="1.5" fill="#94a3b8" opacity="0.3"/>
+  <circle cx="460" cy="320" r="2" fill="#94a3b8" opacity="0.3"/>
+  <circle cx="430" cy="420" r="1.5" fill="#94a3b8" opacity="0.3"/>
+  <circle cx="75" cy="430" r="1.5" fill="#94a3b8" opacity="0.3"/>
+</svg>
