@@ -1,0 +1,733 @@
+import { useState, useEffect, useRef } from "react";
+
+const APPROACHES = [
+  { id: "rnp23", label: "RNP 23", sub: "IAC 6", color: "#3b82f6" },
+  { id: "ils23", label: "ILS 23", sub: "IAC 4", color: "#8b5cf6" },
+  { id: "vory05", label: "VOR Y 05", sub: "IAC 3", color: "#f59e0b" },
+  { id: "vorz05", label: "VOR Z 05", sub: "IAC 1", color: "#10b981" },
+  { id: "vor23", label: "VOR 23", sub: "IAC 2", color: "#ef4444" },
+  { id: "rnp05", label: "RNP 05", sub: "IAC 5", color: "#ec4899" },
+];
+
+const APPROACH_META = {
+  rnp23:  { mda: "780' (534')", circling: "800' (554')", circlingRwy: "05", directRwy: "23", mdaLabel: "LNAV MDA" },
+  ils23:  { mda: "500' (254')", circling: "800' (554')", circlingRwy: "05", directRwy: "23", mdaLabel: "DA" },
+  vory05: { mda: "660' (414')", circling: "800' (554')", circlingRwy: "23", directRwy: "05", mdaLabel: "MDA" },
+  vorz05: { mda: "600' (354')", circling: "800' (554')", circlingRwy: "23", directRwy: "05", mdaLabel: "MDA" },
+  vor23:  { mda: "780' (534')", circling: "800' (554')", circlingRwy: "05", directRwy: "23", mdaLabel: "MDA" },
+  rnp05:  { mda: "760' (514')", circling: "800' (554')", circlingRwy: "23", directRwy: "05", mdaLabel: "LNAV MDA" },
+};
+
+// Entradas al holding según procedencia
+// Para VOR: directo / paralelo / gota
+// Para RNP: siempre HDG+OBS
+const HOLDING_ENTRIES = {
+  // VOR Y 05 — HLDG 255° LT sobre DGO
+  // Sector directo: 075°-255° por la derecha (llegando desde el Este/Sur)
+  // Sector paralelo: 255°-075° por la izquierda (llegando desde el Oeste/Norte)
+  // Sector gota: zona intermedia
+  vory05: {
+    fix: "DGO", hldg: "255°", turn: "Izquierda", nav: "VOR DGO 112.3",
+    desde: {
+      rnp23:  { tipo: "Paralelo",  dir: "NE (EDNOD)",  color: "#3b82f6", steps: [
+        "Frustrada RNP 23: sales TR234 → viraje derecha a 3.500' directo EDNOD",
+        "Desde EDNOD interceptar R360 VOR DGO → NAV",
+        "Llegando a DGO desde el NE (rumbo ~220°)",
+        "→ ENTRADA PARALELA",
+        "Sobre DGO (TO→FROM): volar rumbo 075° (opuesto al alejamiento) por 1 min",
+        "Viraje izquierda 180° para interceptar rumbo 255°",
+        "Interceptar inbound 075° y entrar al holding normalmente",
+      ]},
+      ils23:  { tipo: "Directo",   dir: "S (frustrada)", color: "#8b5cf6", steps: [
+        "Frustrada ILS 23: sales HDG pista → viraje izquierda rumbo Norte",
+        "Interceptar R360 VOR DGO desde el Sur → NAV",
+        "Llegando a DGO desde el Sur (rumbo ~000°)",
+        "→ ENTRADA DIRECTA",
+        "Sobre DGO (TO→FROM): virar izquierda directamente al rumbo de alejamiento 255°",
+        "Tomar tiempo 1 minuto, luego virar izquierda al inbound 075°",
+      ]},
+      vorz05: { tipo: "Directo",   dir: "E (ASBIB)", color: "#10b981", steps: [
+        "Frustrada VOR Z 05: sales R057 → viraje izquierda a 3.000'",
+        "Desde el Este interceptar VOR DGO",
+        "Llegando a DGO desde el Este (rumbo ~255°)",
+        "→ ENTRADA DIRECTA",
+        "Sobre DGO (TO→FROM): virar izquierda directamente al rumbo 255°",
+        "Tomar tiempo 1 minuto, luego virar izquierda al inbound 075°",
+      ]},
+    }
+  },
+  // VOR Z 05 — HLDG 057° LT en ASBIB
+  vorz05: {
+    fix: "ASBIB", hldg: "057°", turn: "Izquierda", nav: "RNP/GPS (ASBIB en FPL)",
+    desde: {
+      rnp23:  { tipo: "Gota de Agua", dir: "NE (EDNOD)", color: "#3b82f6", steps: [
+        "Frustrada RNP 23: sales TR234 → viraje derecha a 3.500' directo EDNOD",
+        "Desde EDNOD volar hacia ASBIB (al SE)",
+        "Llegando a ASBIB desde el NO (rumbo ~120°)",
+        "→ ENTRADA GOTA DE AGUA",
+        "Sobre ASBIB: volar rumbo 237° (30° a la izquierda del inbound 057° invertido)",
+        "Por 1 minuto, luego virar derecha para interceptar inbound 057°",
+        "Entrar al holding normalmente",
+      ]},
+      ils23:  { tipo: "Directo",      dir: "S (frustrada)", color: "#8b5cf6", steps: [
+        "Frustrada ILS 23: sales HDG pista → viraje izquierda",
+        "Volar hacia ASBIB desde el Sur/SW",
+        "Llegando a ASBIB desde el SW (rumbo ~057°)",
+        "→ ENTRADA DIRECTA",
+        "Sobre ASBIB: virar izquierda directamente al rumbo de alejamiento 237°",
+        "Tomar tiempo 1 minuto, luego virar izquierda al inbound 057°",
+      ]},
+      vory05: { tipo: "Directo",      dir: "W (frustrada)", color: "#f59e0b", steps: [
+        "Frustrada VOR Y 05: sales R057 → viraje izquierda a 3.500'",
+        "Volar hacia ASBIB",
+        "Llegando a ASBIB desde el Oeste (rumbo ~057°)",
+        "→ ENTRADA DIRECTA",
+        "Sobre ASBIB: virar izquierda al rumbo de alejamiento 237°",
+        "Tomar tiempo 1 minuto, luego virar izquierda al inbound 057°",
+      ]},
+    }
+  },
+  // VOR 23 — HLDG 255° LT sobre DGO (solo VMC)
+  vor23: {
+    fix: "DGO", hldg: "255°", turn: "Izquierda", nav: "VOR DGO 112.3",
+    desde: {
+      rnp05:  { tipo: "Paralelo",  dir: "E (frustrada)", color: "#ec4899", steps: [
+        "Frustrada RNP 05: sales TR054° → viraje izquierda a 3.000'",
+        "Interceptar VOR DGO desde el Este",
+        "Llegando a DGO desde el Este (rumbo ~255°)",
+        "→ ENTRADA PARALELA",
+        "Sobre DGO (TO→FROM): volar rumbo 075° por 1 min",
+        "Viraje izquierda 180° para interceptar inbound 075°",
+        "⚠️ Holding SOLO en VMC",
+      ]},
+      ils23:  { tipo: "Directo",   dir: "S (frustrada)", color: "#8b5cf6", steps: [
+        "Frustrada ILS 23: sales HDG pista → viraje izquierda rumbo Norte",
+        "Interceptar R360 VOR DGO desde el Sur",
+        "Llegando a DGO desde el Sur (rumbo ~000°)",
+        "→ ENTRADA DIRECTA",
+        "Sobre DGO (TO→FROM): virar izquierda al rumbo 255°",
+        "Tomar tiempo 1 minuto, luego virar izquierda al inbound 075°",
+        "⚠️ Holding SOLO en VMC",
+      ]},
+    }
+  },
+  // RNP 23 — HLDG 144° RT en EDNOD (procedimiento G1000)
+  rnp23: {
+    fix: "EDNOD", hldg: "144°", turn: "Derecha", nav: "G1000 FMS",
+    rnpProcedure: true,
+    desde: {
+      vory05: { dir: "W (frustrada VOR Y)", color: "#f59e0b" },
+      vorz05: { dir: "E (frustrada VOR Z)", color: "#10b981" },
+      ils23:  { dir: "S (frustrada ILS)",   color: "#8b5cf6" },
+    }
+  },
+  // RNP 05 — HLDG 054° LT en ASBIB (procedimiento G1000)
+  rnp05: {
+    fix: "ASBIB", hldg: "054°", turn: "Izquierda", nav: "G1000 FMS",
+    rnpProcedure: true,
+    desde: {
+      vory05: { dir: "W (frustrada VOR Y)", color: "#f59e0b" },
+      vor23:  { dir: "NE (frustrada VOR 23)", color: "#ef4444" },
+      ils23:  { dir: "S (frustrada ILS)",   color: "#8b5cf6" },
+    }
+  },
+};
+
+const RNP_HOLDING_STEPS = (fix, hldg, turn) => [
+  `Llegar directo a ${fix} (activar en FPL del G1000)`,
+  "Al acercarse al fix: apretar HDG en AP",
+  "Apretar OBS en el G1000 (suspende la secuencia del FMS)",
+  `Pasar ${fix} → esperar 5 segundos`,
+  `Virar ${turn === "Derecha" ? "derecha" : "izquierda"} al rumbo de alejamiento ${hldg}`,
+  "Volar el alejamiento por 1 minuto (tomar tiempo)",
+  `Virar ${turn === "Derecha" ? "derecha" : "izquierda"} para inbound`,
+  "Al estar establecido inbound: desactivar OBS → G1000 retoma secuencia",
+  "Continuar aproximación normalmente",
+];
+
+const circularSteps = (rwy) => {
+  const crs = rwy === "23" ? "234°" : "054°";
+  return [
+    "⚠️ CAMBIAR MÍNIMA: MDA circular Cat A = 800' (554')",
+    "1.3 millas de la pista: virar 45° con HDG · mantener 800'",
+    `30 SEGUNDOS exactos → CRS ${crs} en VOR (referencia pista ${rwy})`,
+    "Circular con referencias visuales (CEIL 1.150 ft)",
+    `Solo bajar con pista ${rwy} a la vista`,
+    "Desconectar AP en base",
+    "Aterrizar pista " + rwy,
+  ];
+};
+
+const FLOWS = {
+  rnp23: {
+    label: "RNP RWY 23", color: "#3b82f6",
+    info: "MDA directa: 780' (534') · Circular Cat A: 800' (554') · Curso: 234°",
+    phases: [
+      { id: "llegada", label: "📡 Llegada", steps: [
+        "Llegada desde el Este por ISROL (salida visual Padre Hurtado)",
+        "G1000: Cargar RNP RWY 23 → activar → IAF: ISROL",
+        "COM: Torre Santo Domingo 134.6 / 121.9",
+        "BARO actualizado · Nivel de transición por ATC",
+        "Velocidad: 100 kt · Flap: 10° (1 noch)",
+        "AP: HDG + ALT activos",
+        "⚠️ APR en AP al pasar ISROL",
+      ]},
+      { id: "hldg", label: "🔄 Holding EDNOD", isHolding: true, holdingId: "rnp23" },
+      { id: "briefing", label: "📋 Briefing", steps: [
+        "Tipo: RNP RWY 23 (LNAV only) — Solo instrucción",
+        "IAF: ISROL / ASBOX / SN028 · FAF: GELAX · MAPt: RW23",
+        "Curso final: 234° · ALT mínima ASBOX: 1.900'",
+        "LNAV MDA directa RWY 23: 780' (534')",
+        "MDA circular Cat A RWY 05: 800' (554') · CEIL 1.150 ft",
+        "Frustrada: TR234 hasta 1.500' → viraje derecha a 3.500' directo EDNOD → HLDG 144° RT",
+      ]},
+      { id: "aprox", label: "✈️ Aproximación", steps: [
+        "ISROL: colocar APR en AP",
+        "Velocidad: 100 kt · Flap: 10°",
+        "Pasando GELAX (FAF): notificar 'dejando 3.500' / iniciando aprox'",
+        "Flap: 20° · Velocidad: 90 kt",
+        "G1000: modificar altitud AP a próxima mínima",
+        "Preparar altitud frustrada 3.500' en AP",
+        "Descenso 3.18° · FPM 100 kt = 563 fpm",
+        "A 20 ft sobre MDA: ALT en AP · volar hasta MAPt RW23",
+      ]},
+      { id: "circular", label: "🔄 Circular → 05", isCircular: true, circRwy: "05", steps: circularSteps("05") },
+      { id: "missed", label: "🔺 Frustrada", steps: [
+        "Potencia: FULL · Limpiar avión",
+        "Presionar GO AROUND",
+        "TR 234° hasta 1.500' → viraje derecha a 3.500' directo EDNOD",
+        "HLDG 144° RT en EDNOD (Max 175 KIAS)",
+      ]},
+      { id: "errores", label: "⚠️ Errores", steps: [
+        "✅ APR en AP (obligatorio RNP)",
+        "✅ Orbitar/RNP: 100 kt + 1 noch · Descenso: 90 kt + 2 nochs",
+        "✅ Circular: MDA 800' ≠ MDA directa 780'",
+        "✅ Al virar: PRIMERO selector HDG hacia el lado del viraje",
+      ]}
+    ]
+  },
+  ils23: {
+    label: "ILS RWY 23", color: "#8b5cf6",
+    info: "LOC ISNO: 109.9 · VOR DGO: 112.3 · DA: 500' (254') · Circular Cat A: 800' (554')",
+    phases: [
+      { id: "llegada", label: "📡 Llegada", steps: [
+        "NAV1: VOR DGO 112.3 · CRS: 360°",
+        "NAV2: precargar LOC ISNO 109.9 · CRS: 234°",
+        "COM: Torre Santo Domingo 134.6 / 121.9",
+        "Solicitar interceptar R360 para orbitar arco",
+        "AP: HDG → NAV para capturar VOR",
+        "Velocidad: 100 kt · Flap: 10°",
+        "⚠️ Aguja HMI (azul): máximo ±10° al orbitar",
+        "⚠️ Briefing mientras se orbita camino a DGO",
+      ]},
+      { id: "briefing", label: "📋 Briefing", steps: [
+        "Tipo: ILS RWY 23 — Solo instrucción · No permite OPS en IMC",
+        "LOC ISNO: 109.9 · Curso: 234° · GP: 3.1°",
+        "DA directa RWY 23: 500' (254')",
+        "MDA circular Cat A RWY 05: 800' (554') · CEIL 1.150 ft",
+        "ALT MNM arco/espera: 3.000' · FPM 100 kt = 548 fpm",
+        "Frustrada: HDG pista hasta 1.000' → viraje izquierda VFR o ATC",
+        "⚠️ AP se desconecta SOLO para descenso ILS",
+      ]},
+      { id: "arco", label: "🔄 Orbitando Arco", steps: [
+        "Capturar VOR DGO 112.3 CRS 360° → AP en NAV",
+        "Al capturar: HDG 90° derecha para orbitar",
+        "Orbitar 100 kt · 1 noch · ±0.5 millas",
+        "⚠️ Aguja HMI ±10° máximo",
+        "A 6.5 millas: HDG, nivelar 3.000' · CRS 234°",
+        "En arco 4: virar HDG 054° (corregir viento)",
+        "En arco 7: buscar 'la calle' → NAV",
+      ]},
+      { id: "aprox", label: "✈️ Procedimiento ILS", steps: [
+        "Circuito si es necesario · descender a 2.000'",
+        "Flap: 2 nochs · Velocidad: 90 kt",
+        "Pasando arco 7: virar izquierda",
+        "Pasados 90°: cambiar NAV1 → LOC ISNO 109.9",
+        "Interceptar LOC → APR en AP",
+        "GS vivo: DESCONECTAR AP → descenso MANUAL",
+        "GP 3.1° · FPM 100 kt = 548 fpm · DA: 500' (254')",
+      ]},
+      { id: "circular", label: "🔄 Circular → 05", isCircular: true, circRwy: "05", steps: circularSteps("05") },
+      { id: "missed", label: "🔺 Frustrada", steps: [
+        "Potencia: FULL · Limpiar avión",
+        "HDG pista hasta 1.000' → viraje izquierda VFR/ATC",
+        "⚠️ Ajustar altitud AP según próxima aproximación",
+      ]},
+      { id: "errores", label: "⚠️ Errores", steps: [
+        "✅ AP desconectado SOLO con GS vivo",
+        "✅ Aguja HMI ±10° máximo al orbitar",
+        "✅ Cambiar NAV1 a 109.9 antes de interceptar LOC",
+        "✅ Circular: MDA 800' ≠ DA directa 500'",
+      ]}
+    ]
+  },
+  vory05: {
+    label: "VOR Y RWY 05", color: "#f59e0b",
+    info: "VOR DGO: 112.3 · MDA directa: 660' (414') · Circular Cat A: 800' (554')",
+    phases: [
+      { id: "llegada", label: "📡 Llegada", steps: [
+        "VOR DGO: 112.3 · CRS hacia la estación",
+        "ALT MNM espera: 3.500' · HLDG 255° LT",
+        "Velocidad: 100 kt · Flap: 10°",
+        "⚠️ Briefing mientras vas hacia DGO",
+      ]},
+      { id: "hldg", label: "🔄 Holding DGO", isHolding: true, holdingId: "vory05" },
+      { id: "briefing", label: "📋 Briefing", steps: [
+        "Tipo: VOR Y RWY 05 — Solo instrucción · Sin FAF",
+        "VOR DGO: 112.3 · Curso final: 057° · Alejamiento: 255° × 3 min",
+        "MDA directa RWY 05: 660' (414')",
+        "MDA circular Cat A RWY 23: 800' (554') · CEIL 1.150 ft",
+        "Frustrada: R057 hasta 1.000' → viraje izq a 3.500' → HLDG 255° LT",
+      ]},
+      { id: "espera", label: "⏱️ Circuito Espera", steps: [
+        "TO→FROM sobre DGO: TOMAR TIEMPO 1 minuto",
+        "Corrección viento: +10° (0.85 millas)",
+        "HDG · CRS a 255°",
+        "Después de 1 min: virar derecha → buscar 'la calle'",
+        "Sobre DGO nuevamente: TOMAR TIEMPO 3 minutos",
+        "Iniciar descenso 400 fpm hacia 1.900'",
+      ]},
+      { id: "aprox", label: "✈️ Aproximación", steps: [
+        "Minuto 2:45 → HDG · CRS a 057°",
+        "Iniciar viraje → NAV (pasados 90°)",
+        "CDI vivo: descender bajo 1.900'",
+        "Flap: 2 nochs · Velocidad: 90 kt",
+        "MDA directa: 660' (414')",
+      ]},
+      { id: "circular", label: "🔄 Circular → 23", isCircular: true, circRwy: "23", steps: circularSteps("23") },
+      { id: "missed", label: "🔺 Frustrada", steps: [
+        "Potencia: FULL · Limpiar avión",
+        "R057 DGO hasta 1.000' → viraje izq a 3.500'",
+        "HLDG 255° LT o VFR/ATC",
+      ]},
+      { id: "errores", label: "⚠️ Errores", steps: [
+        "✅ Circular: MDA 800' ≠ MDA directa 660'",
+        "✅ 30 seg exactos → CRS 234° inmediatamente",
+        "✅ Desconectar AP en base · Corrección viento +10°",
+      ]}
+    ]
+  },
+  vorz05: {
+    label: "VOR Z RWY 05", color: "#10b981",
+    info: "VOR DGO: 112.3 · MDA directa: 600' (354') · Circular Cat A: 800' (554') · DME requerido",
+    phases: [
+      { id: "llegada", label: "📡 Llegada", steps: [
+        "VOR DGO: 112.3 · DME requerido en G1000",
+        "ALT MNM D4 (FAF): 1.600' · ALT espera: 3.000'",
+        "COM: Torre Santo Domingo 134.6 / 121.9",
+        "Velocidad: 100 kt · Flap: 10°",
+      ]},
+      { id: "hldg", label: "🔄 Holding ASBIB", isHolding: true, holdingId: "vorz05" },
+      { id: "briefing", label: "📋 Briefing", steps: [
+        "Tipo: VOR Z RWY 05 — Solo instrucción · DME requerido",
+        "VOR DGO: 112.3 · Curso: 057° · FAF: D4 (1.600') · MAPt: D1",
+        "MDA directa RWY 05: 600' (354')",
+        "MDA circular Cat A RWY 23: 800' (554') · CEIL 1.150 ft",
+        "Descenso 3.4° · FPM 100 kt = 733 fpm",
+        "Frustrada: R057 hasta D2 → cruzar D2 a 1.000' → viraje izq a 3.000' → HLDG 057° LT ASBIB",
+      ]},
+      { id: "aprox", label: "✈️ Aproximación", steps: [
+        "Directo VOR DGO · CRS 057° (FROM)",
+        "DME: D9 → D6 → D4 (FAF) · descender",
+        "Flap: 2 nochs · Vel: 90 kt · FPM = 733",
+        "D2 → D1 (MAPt): MDA 600' (354')",
+      ]},
+      { id: "circular", label: "🔄 Circular → 23", isCircular: true, circRwy: "23", steps: circularSteps("23") },
+      { id: "missed", label: "🔺 Frustrada", steps: [
+        "Potencia: FULL · Limpiar avión",
+        "R057 hasta D2 (1.000') → viraje izq a 3.000'",
+        "HLDG 057° LT ASBIB o VFR/ATC",
+      ]},
+      { id: "errores", label: "⚠️ Errores", steps: [
+        "✅ DME activo · Circular: MDA 800' ≠ directa 600'",
+        "✅ 30 seg → CRS 234° inmediatamente",
+      ]}
+    ]
+  },
+  vor23: {
+    label: "VOR RWY 23", color: "#ef4444",
+    info: "VOR DGO: 112.3 · MDA directa: 780' (534') · Circular Cat A: 800' (554') · DME requerido",
+    phases: [
+      { id: "llegada", label: "📡 Llegada", steps: [
+        "VOR DGO: 112.3 · DME requerido",
+        "ALT MNM D5 (FAF): 1.900' · ALT espera: 3.500'",
+        "COM: Torre Santo Domingo 134.6 / 121.9",
+        "⚠️ Holding SOLO en VMC",
+      ]},
+      { id: "hldg", label: "🔄 Holding DGO", isHolding: true, holdingId: "vor23" },
+      { id: "briefing", label: "📋 Briefing", steps: [
+        "Tipo: VOR RWY 23 — Solo instrucción · DME requerido",
+        "VOR DGO: 112.3 · Curso: 229° · FAF: D5 (1.900') · MAPt: D1",
+        "MDA directa RWY 23: 780' (534')",
+        "MDA circular Cat A RWY 05: 800' (554') · CEIL 1.150 ft",
+        "Descenso 3.2° · FPM 100 kt = 793 fpm",
+        "Frustrada: R229 hasta 1.500' → viraje derecha VFR/ATC",
+      ]},
+      { id: "aprox", label: "✈️ Aproximación", steps: [
+        "Directo VOR DGO · entrada D10 · CRS 229° (FROM)",
+        "DME: D10→D8→D5(FAF) · descender",
+        "Flap: 2 nochs · Vel: 90 kt · FPM = 793",
+        "D3 → D1 (MAPt): MDA 780' (534')",
+      ]},
+      { id: "circular", label: "🔄 Circular → 05", isCircular: true, circRwy: "05", steps: circularSteps("05") },
+      { id: "missed", label: "🔺 Frustrada", steps: [
+        "Potencia: FULL · Limpiar avión",
+        "R229 hasta 1.500' → viraje derecha VFR/ATC",
+      ]},
+      { id: "errores", label: "⚠️ Errores", steps: [
+        "✅ DME activo · Holding SOLO en VMC",
+        "✅ Circular: MDA 800' ≠ directa 780' (diferencia pequeña)",
+        "✅ 30 seg → CRS 054° inmediatamente",
+      ]}
+    ]
+  },
+  rnp05: {
+    label: "RNP RWY 05", color: "#ec4899",
+    info: "MDA directa: 760' (514') · Circular Cat A: 800' (554') · FAF: DODMO",
+    phases: [
+      { id: "llegada", label: "📡 Llegada", steps: [
+        "G1000: Cargar RNP RWY 05 → activar → IAF: UTLOR o ASBIB",
+        "COM: Torre Santo Domingo 134.6 / 121.9",
+        "BARO actualizado · ALT MNM DODMO: 1.600' · Espera: 3.000'",
+        "Velocidad: 100 kt · Flap: 10°",
+        "⚠️ APR en AP al entrar tramo final",
+      ]},
+      { id: "hldg", label: "🔄 Holding ASBIB", isHolding: true, holdingId: "rnp05" },
+      { id: "briefing", label: "📋 Briefing", steps: [
+        "Tipo: RNP RWY 05 (LNAV only) — Solo instrucción",
+        "IAF: UTLOR · IF/IAF: ASBIB · FAF: DODMO · MAPt: RW05",
+        "Curso: 054° · LNAV MDA directa: 760' (514')",
+        "MDA circular Cat A RWY 23: 800' (554') · CEIL 1.150 ft",
+        "Descenso 3.15° · FPM 100 kt = 557 fpm",
+        "Frustrada: TR054° hasta 1.000' → viraje izq a 3.000' directo ASBIB → HLDG 054° LT",
+      ]},
+      { id: "aprox", label: "✈️ Aproximación", steps: [
+        "UTLOR → ASBIB (3.000') → DODMO (FAF, 1.600')",
+        "DODMO: APR en AP",
+        "Flap: 2 nochs · Vel: 90 kt · FPM = 557",
+        "A 20 ft sobre MDA: ALT en AP · volar hasta MAPt RW05",
+      ]},
+      { id: "circular", label: "🔄 Circular → 23", isCircular: true, circRwy: "23", steps: circularSteps("23") },
+      { id: "missed", label: "🔺 Frustrada", steps: [
+        "Potencia: FULL · GO AROUND",
+        "TR054° hasta 1.000' → viraje izq a 3.000' directo ASBIB",
+        "HLDG 054° LT o VFR/ATC",
+      ]},
+      { id: "errores", label: "⚠️ Errores", steps: [
+        "✅ APR en AP (obligatorio RNP)",
+        "✅ Circular: MDA 800' ≠ directa 760'",
+        "✅ 30 seg → CRS 234° inmediatamente",
+      ]}
+    ]
+  },
+};
+
+const TIMERS = [
+  { label: "1:00 alejamiento", secs: 60 },
+  { label: "3:00 acercamiento", secs: 180 },
+  { label: "0:30 circular", secs: 30 },
+  { label: "2:45 iniciar viraje", secs: 165 },
+];
+
+const FROM_LABELS = {
+  rnp23: "RNP 23", ils23: "ILS 23", vory05: "VOR Y 05",
+  vorz05: "VOR Z 05", vor23: "VOR 23", rnp05: "RNP 05",
+};
+
+export default function App() {
+  const [sel, setSel] = useState(null);
+  const [phase, setPhase] = useState(null);
+  const [checked, setChecked] = useState({});
+  const [elapsed, setElapsed] = useState(0);
+  const [running, setRunning] = useState(false);
+  const [targetSecs, setTargetSecs] = useState(null);
+  const [hldgFrom, setHldgFrom] = useState(null);
+  const interval = useRef(null);
+
+  useEffect(() => {
+    if (running) interval.current = setInterval(() => setElapsed(e => e + 1), 1000);
+    else clearInterval(interval.current);
+    return () => clearInterval(interval.current);
+  }, [running]);
+
+  useEffect(() => {
+    if (targetSecs && elapsed >= targetSecs) setRunning(false);
+  }, [elapsed, targetSecs]);
+
+  const toggleCheck = k => setChecked(c => ({ ...c, [k]: !c[k] }));
+  const resetPhase = () => { setChecked({}); setElapsed(0); setRunning(false); setTargetSecs(null); };
+  const fmt = s => `${Math.floor(s/60).toString().padStart(2,'0')}:${(s%60).toString().padStart(2,'0')}`;
+
+  const appr = sel ? FLOWS[sel] : null;
+  const meta = sel ? APPROACH_META[sel] : null;
+  const phaseObj = appr && phase ? appr.phases.find(p => p.id === phase) : null;
+  const checkedN = phaseObj && !phaseObj.isHolding ? phaseObj.steps.filter((_, i) => checked[`${phase}-${i}`]).length : 0;
+  const totalN = phaseObj && !phaseObj.isHolding ? phaseObj.steps.length : 0;
+  const timerAlarm = targetSecs && elapsed >= targetSecs;
+  const timerPct = targetSecs ? Math.min((elapsed / targetSecs) * 100, 100) : 0;
+
+  // Holding panel
+  const holdingData = phaseObj?.isHolding ? HOLDING_ENTRIES[phaseObj.holdingId] : null;
+  const isRnpHolding = holdingData?.rnpProcedure;
+  const hldgFromData = hldgFrom && holdingData ? holdingData.desde[hldgFrom] : null;
+  const hldgSteps = isRnpHolding
+    ? RNP_HOLDING_STEPS(holdingData.fix, holdingData.hldg, holdingData.turn)
+    : hldgFromData?.steps || null;
+
+  return (
+    <div style={{ minHeight: "100vh", background: "#0f172a", color: "#e2e8f0", fontFamily: "system-ui, sans-serif", padding: "14px", maxWidth: 480, margin: "0 auto" }}>
+      {/* Header */}
+      <div style={{ textAlign: "center", marginBottom: 14 }}>
+        <div style={{ fontSize: 20, fontWeight: 800 }}>🛩️ SCSN IFR FLOWS</div>
+        <div style={{ fontSize: 11, color: "#64748b" }}>T206H · G1000 · Santo Domingo · DGAC Oficial</div>
+      </div>
+
+      {/* Velocidades */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 12, justifyContent: "center", flexWrap: "wrap" }}>
+        {[{ fase:"Orbitar/RNP", vel:"100 kt", flap:"1 noch" }, { fase:"Aprox/Descenso", vel:"90 kt", flap:"2 nochs" }].map(v => (
+          <div key={v.fase} style={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, padding: "5px 10px", fontSize: 11, textAlign: "center" }}>
+            <div style={{ color: "#64748b", fontSize: 10 }}>{v.fase}</div>
+            <span style={{ color: "#38bdf8", fontWeight: 700 }}>{v.vel}</span>
+            <span style={{ color: "#64748b" }}> · </span>
+            <span style={{ color: "#fbbf24", fontWeight: 700 }}>{v.flap}</span>
+          </div>
+        ))}
+        <div style={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, padding: "5px 10px", fontSize: 11, textAlign: "center" }}>
+          <div style={{ color: "#64748b", fontSize: 10 }}>Torre SCSN</div>
+          <span style={{ color: "#4ade80", fontWeight: 700 }}>134.6 / 121.9</span>
+        </div>
+      </div>
+
+      {/* Selector Aproximación */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 7, marginBottom: 12 }}>
+        {APPROACHES.map(a => (
+          <button key={a.id} onClick={() => { setSel(a.id); setPhase(null); setHldgFrom(null); resetPhase(); }}
+            style={{ padding: "8px 4px", borderRadius: 9, border: `2px solid ${sel === a.id ? a.color : "#334155"}`,
+              background: sel === a.id ? a.color + "22" : "#1e293b",
+              color: sel === a.id ? a.color : "#94a3b8",
+              fontWeight: 700, fontSize: 12, cursor: "pointer", lineHeight: 1.3 }}>
+            <div>{a.label}</div>
+            <div style={{ fontSize: 10, fontWeight: 400, opacity: 0.7 }}>{a.sub}</div>
+          </button>
+        ))}
+      </div>
+
+      {/* MDA banner */}
+      {meta && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 10 }}>
+          <div style={{ background: "#1e293b", borderRadius: 8, padding: "7px 10px", fontSize: 11, border: `1px solid ${appr.color}44`, textAlign: "center" }}>
+            <div style={{ color: "#64748b", fontSize: 10, marginBottom: 2 }}>↓ DIRECTA RWY {meta.directRwy} ({meta.mdaLabel})</div>
+            <div style={{ color: "#f87171", fontWeight: 800, fontSize: 15 }}>{meta.mda}</div>
+          </div>
+          <div style={{ background: "#1e293b", borderRadius: 8, padding: "7px 10px", fontSize: 11, border: "1px solid #f59e0b44", textAlign: "center" }}>
+            <div style={{ color: "#64748b", fontSize: 10, marginBottom: 2 }}>🔄 CIRCULAR RWY {meta.circlingRwy} (Cat A)</div>
+            <div style={{ color: "#fbbf24", fontWeight: 800, fontSize: 15 }}>{meta.circling}</div>
+          </div>
+        </div>
+      )}
+
+      {/* Selector Fase */}
+      {appr && (
+        <div style={{ display: "flex", gap: 5, marginBottom: 10, flexWrap: "wrap" }}>
+          {appr.phases.map(p => {
+            const done = !p.isHolding && p.steps && p.steps.filter((_, i) => checked[`${p.id}-${i}`]).length === p.steps.length;
+            const isCirc = p.isCircular;
+            const isHldg = p.isHolding;
+            const activeColor = isHldg ? "#06b6d4" : isCirc ? "#f59e0b" : appr.color;
+            return (
+              <button key={p.id} onClick={() => { setPhase(p.id); resetPhase(); setHldgFrom(null); }}
+                style={{ padding: "5px 9px", borderRadius: 7,
+                  border: `1px solid ${phase === p.id ? activeColor : done ? "#22c55e" : "#334155"}`,
+                  background: phase === p.id ? activeColor + "22" : done ? "#14532d44" : "#1e293b",
+                  color: phase === p.id ? activeColor : done ? "#22c55e" : "#94a3b8",
+                  fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
+                {done ? "✓ " : ""}{p.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* HOLDING PANEL */}
+      {phaseObj?.isHolding && holdingData && (
+        <div style={{ background: "#1e293b", borderRadius: 12, padding: 14, marginBottom: 12, border: "1px solid #06b6d444" }}>
+          <div style={{ color: "#06b6d4", fontWeight: 700, fontSize: 13, marginBottom: 4 }}>
+            🔄 Holding {holdingData.fix} — {holdingData.hldg} {holdingData.turn}
+          </div>
+          <div style={{ color: "#64748b", fontSize: 11, marginBottom: 12 }}>{holdingData.nav}</div>
+
+          {isRnpHolding ? (
+            // RNP: procedimiento fijo HDG+OBS
+            <div>
+              <div style={{ background: "#0c2233", border: "1px solid #06b6d444", borderRadius: 8, padding: "8px 10px", marginBottom: 10, fontSize: 12, color: "#67e8f9", fontWeight: 600 }}>
+                Procedimiento G1000: HDG → OBS → 5 seg → virar
+              </div>
+              {RNP_HOLDING_STEPS(holdingData.fix, holdingData.hldg, holdingData.turn).map((s, i) => (
+                <div key={i} onClick={() => toggleCheck(`hldg-${i}`)}
+                  style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "5px 4px", borderRadius: 7, cursor: "pointer",
+                    background: checked[`hldg-${i}`] ? "#0f2a1a" : "transparent", marginBottom: 1 }}>
+                  <div style={{ width: 18, height: 18, minWidth: 18, borderRadius: 4, marginTop: 1,
+                    border: `2px solid ${checked[`hldg-${i}`] ? "#22c55e" : "#475569"}`,
+                    background: checked[`hldg-${i}`] ? "#22c55e" : "transparent",
+                    display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    {checked[`hldg-${i}`] && <span style={{ color: "#0f2a1a", fontSize: 11, fontWeight: 900 }}>✓</span>}
+                  </div>
+                  <span style={{ fontSize: 12, color: checked[`hldg-${i}`] ? "#4ade80" : "#cbd5e1",
+                    textDecoration: checked[`hldg-${i}`] ? "line-through" : "none", lineHeight: 1.5 }}>{s}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            // VOR: selector de procedencia
+            <div>
+              <div style={{ color: "#94a3b8", fontSize: 11, marginBottom: 8 }}>¿De dónde vienes?</div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+                {Object.entries(holdingData.desde).map(([fromId, fromData]) => (
+                  <button key={fromId} onClick={() => setHldgFrom(hldgFrom === fromId ? null : fromId)}
+                    style={{ padding: "5px 10px", borderRadius: 7, fontSize: 11, fontWeight: 600, cursor: "pointer",
+                      border: `1px solid ${hldgFrom === fromId ? fromData.color : "#334155"}`,
+                      background: hldgFrom === fromId ? fromData.color + "22" : "#0f172a",
+                      color: hldgFrom === fromId ? fromData.color : "#64748b" }}>
+                    {FROM_LABELS[fromId]}
+                  </button>
+                ))}
+              </div>
+
+              {hldgFromData && (
+                <div>
+                  <div style={{ background: "#0c1f2e", border: `1px solid ${hldgFromData.color}66`, borderRadius: 8, padding: "7px 10px", marginBottom: 10 }}>
+                    <span style={{ color: "#64748b", fontSize: 11 }}>Entrada: </span>
+                    <span style={{ color: hldgFromData.color, fontWeight: 800, fontSize: 14 }}>{hldgFromData.tipo}</span>
+                    <span style={{ color: "#64748b", fontSize: 11 }}> · desde {hldgFromData.dir}</span>
+                  </div>
+                  {hldgFromData.steps.map((s, i) => {
+                    const isSection = s.startsWith("→");
+                    return (
+                      <div key={i} onClick={() => !isSection && toggleCheck(`hldg-${hldgFrom}-${i}`)}
+                        style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "5px 4px",
+                          paddingLeft: isSection ? 4 : 4,
+                          borderRadius: 7, cursor: isSection ? "default" : "pointer",
+                          background: !isSection && checked[`hldg-${hldgFrom}-${i}`] ? "#0f2a1a" : "transparent",
+                          marginBottom: 1 }}>
+                        {isSection ? (
+                          <div style={{ width: "100%", background: "#1e3a5f", borderRadius: 6, padding: "4px 8px",
+                            color: hldgFromData.color, fontWeight: 700, fontSize: 12 }}>{s}</div>
+                        ) : (
+                          <>
+                            <div style={{ width: 18, height: 18, minWidth: 18, borderRadius: 4, marginTop: 1,
+                              border: `2px solid ${checked[`hldg-${hldgFrom}-${i}`] ? "#22c55e" : "#475569"}`,
+                              background: checked[`hldg-${hldgFrom}-${i}`] ? "#22c55e" : "transparent",
+                              display: "flex", alignItems: "center", justifyContent: "center" }}>
+                              {checked[`hldg-${hldgFrom}-${i}`] && <span style={{ color: "#0f2a1a", fontSize: 11, fontWeight: 900 }}>✓</span>}
+                            </div>
+                            <span style={{ fontSize: 12, color: checked[`hldg-${hldgFrom}-${i}`] ? "#4ade80" : "#cbd5e1",
+                              textDecoration: checked[`hldg-${hldgFrom}-${i}`] ? "line-through" : "none", lineHeight: 1.5 }}>{s}</span>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {!hldgFrom && (
+                <div style={{ color: "#334155", fontSize: 12, textAlign: "center", padding: "10px 0" }}>
+                  Selecciona la aproximación anterior
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* CHECKLIST NORMAL */}
+      {phaseObj && !phaseObj.isHolding && (
+        <div style={{ background: "#1e293b", borderRadius: 12, padding: 14, marginBottom: 12,
+          border: `1px solid ${phaseObj.isCircular ? "#f59e0b66" : appr.color + "44"}` }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <div style={{ fontWeight: 700, color: phaseObj.isCircular ? "#f59e0b" : appr.color, fontSize: 13 }}>{phaseObj.label}</div>
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <span style={{ fontSize: 11, color: "#64748b" }}>{checkedN}/{totalN}</span>
+              <button onClick={resetPhase} style={{ background: "#334155", border: "none", borderRadius: 5, color: "#94a3b8", padding: "2px 7px", fontSize: 10, cursor: "pointer" }}>Reset</button>
+            </div>
+          </div>
+          {phaseObj.isCircular && (
+            <div style={{ background: "#451a03", border: "1px solid #f59e0b88", borderRadius: 8, padding: "6px 10px", marginBottom: 10, fontSize: 12, color: "#fcd34d", fontWeight: 700, textAlign: "center" }}>
+              🔄 CIRCULAR Cat A · MDA = 800' (554') · RWY {phaseObj.circRwy}
+            </div>
+          )}
+          <div style={{ height: 3, background: "#334155", borderRadius: 99, marginBottom: 10 }}>
+            <div style={{ height: 3, background: phaseObj.isCircular ? "#f59e0b" : appr.color, borderRadius: 99, width: `${(checkedN/totalN)*100}%`, transition: "width 0.3s" }} />
+          </div>
+          {phaseObj.steps.map((step, i) => {
+            const key = `${phase}-${i}`;
+            const isWarning = step.startsWith("⚠️") || step.startsWith("✅");
+            return (
+              <div key={i} onClick={() => toggleCheck(key)}
+                style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "6px 4px",
+                  borderRadius: 7, cursor: "pointer",
+                  background: checked[key] ? "#0f2a1a" : "transparent", marginBottom: 1 }}>
+                <div style={{ width: 18, height: 18, minWidth: 18, borderRadius: 4,
+                  border: `2px solid ${checked[key] ? "#22c55e" : isWarning ? "#f59e0b66" : "#475569"}`,
+                  background: checked[key] ? "#22c55e" : "transparent",
+                  display: "flex", alignItems: "center", justifyContent: "center", marginTop: 1 }}>
+                  {checked[key] && <span style={{ color: "#0f2a1a", fontSize: 11, fontWeight: 900 }}>✓</span>}
+                </div>
+                <span style={{ fontSize: 12, color: checked[key] ? "#4ade80" : isWarning ? "#fcd34d" : "#cbd5e1",
+                  textDecoration: checked[key] ? "line-through" : "none", lineHeight: 1.5 }}>
+                  {step}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Timers */}
+      {sel && (
+        <div style={{ background: "#1e293b", borderRadius: 12, padding: 14, border: `1px solid ${timerAlarm ? "#ef4444" : "#334155"}` }}>
+          <div style={{ fontWeight: 700, marginBottom: 10, fontSize: 13 }}>⏱️ Timers</div>
+          <div style={{ textAlign: "center", marginBottom: 10 }}>
+            <div style={{ fontSize: 40, fontWeight: 900, fontFamily: "monospace",
+              color: timerAlarm ? "#ef4444" : running ? "#38bdf8" : elapsed > 0 ? "#fbbf24" : "#475569" }}>
+              {fmt(elapsed)}
+            </div>
+            {targetSecs && (
+              <div style={{ height: 4, background: "#334155", borderRadius: 99, margin: "6px 0" }}>
+                <div style={{ height: 4, background: timerAlarm ? "#ef4444" : "#38bdf8", borderRadius: 99, width: `${timerPct}%`, transition: "width 0.5s" }} />
+              </div>
+            )}
+            {timerAlarm && <div style={{ color: "#ef4444", fontWeight: 700, fontSize: 13 }}>⚡ TIEMPO!</div>}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 6, marginBottom: 10 }}>
+            {TIMERS.map(t => (
+              <button key={t.label} onClick={() => { setElapsed(0); setTargetSecs(t.secs); setRunning(true); }}
+                style={{ padding: "6px 8px", borderRadius: 7, border: "1px solid #334155",
+                  background: "#0f172a", color: "#94a3b8", fontSize: 11, cursor: "pointer", fontWeight: 600 }}>
+                ▶ {t.label}
+              </button>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => setRunning(r => !r)}
+              style={{ flex: 1, padding: "8px", borderRadius: 8, border: "none",
+                background: running ? "#7f1d1d" : "#14532d",
+                color: running ? "#fca5a5" : "#86efac", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+              {running ? "⏸ Pausar" : "▶ Iniciar"}
+            </button>
+            <button onClick={() => { setElapsed(0); setRunning(false); setTargetSecs(null); }}
+              style={{ flex: 1, padding: "8px", borderRadius: 8, border: "1px solid #334155",
+                background: "#1e293b", color: "#94a3b8", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+              ↺ Reset
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!sel && (
+        <div style={{ textAlign: "center", color: "#334155", marginTop: 40, fontSize: 13 }}>
+          Selecciona una aproximación para comenzar
+        </div>
+      )}
+    </div>
+  );
+}
